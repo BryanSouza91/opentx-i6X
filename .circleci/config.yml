@@ -61,23 +61,28 @@ workflows:
             branches:
               ignore:
                 - master
+                - /.*-maintenance/
       - build-std:
           filters:
             branches:
               only:
                 - master
+                - /.*-maintenance/
       - build-std-dfplayer:
           filters:
             branches:
               only:
                 - master
+                - /.*-maintenance/
       - build-heli:
           filters:
             branches:
               only:
                 - master
+                - /.*-maintenance/
       - build-heli-dfplayer:
           filters:
             branches:
               only:
                 - master
+                - /.*-maintenance/
