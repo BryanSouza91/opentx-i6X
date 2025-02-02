@@ -1273,7 +1273,7 @@ void usbPluggedIn();
 
 #include "lua/lua_api.h"
 
-#if defined(SDCARD)
+#if defined(CLIPBOARD)
 enum ClipboardType {
   CLIPBOARD_TYPE_NONE,
   CLIPBOARD_TYPE_CUSTOM_SWITCH,
@@ -1292,10 +1292,12 @@ struct Clipboard {
   union {
     LogicalSwitchData csw;
     CustomFunctionData cfn;
+#if defined(SDCARD)
     struct {
       char directory[CLIPBOARD_PATH_LEN];
       char filename[CLIPBOARD_PATH_LEN];
     } sd;
+#endif
   } data;
 };
 

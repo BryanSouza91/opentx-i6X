@@ -23,7 +23,7 @@
 RadioData g_eeGeneral;
 ModelData g_model;
 
-#if defined(SDCARD)
+#if defined(CLIPBOARD)
 Clipboard clipboard;
 #endif
 
