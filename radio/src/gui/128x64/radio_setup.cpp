@@ -400,14 +400,6 @@ void menuRadioSetup(event_t event)
       }
 #endif
 
-#if defined(TX_CAPACITY_MEASUREMENT)
-      case ITEM_SETUP_CAPACITY_WARNING:
-        lcdDrawTextAlignedLeft(y, STR_CAPAWARNING);
-        drawValueWithUnit(RADIO_SETUP_2ND_COLUMN, y, g_eeGeneral.mAhWarn*50, UNIT_MAH, attr|LEFT) ;
-        if(attr) CHECK_INCDEC_GENVAR(event, g_eeGeneral.mAhWarn, 0, 100);
-        break;
-#endif
-
       case ITEM_SETUP_INACTIVITY_ALARM:
         lcdDrawTextIndented(y, STR_INACTIVITYALARM);
         lcdDrawNumber(LCD_W-7, y, g_eeGeneral.inactivityTimer, attr|RIGHT);
