@@ -494,8 +494,8 @@ typedef uint16_t swconfig_t;
 typedef uint16_t swarnstate_t;
 typedef uint8_t swarnenable_t;
 #elif defined(PCBI6X)
-typedef uint8_t swconfig_t;
-typedef uint8_t swarnstate_t;
+typedef uint16_t swconfig_t;
+typedef uint16_t swarnstate_t;
 typedef uint8_t swarnenable_t;
 #else
 typedef uint8_t swarnstate_t;
@@ -890,8 +890,8 @@ static inline void check_struct() {
   CHKSIZE(TrainerData, 16);
 
 #if defined(PCBI6X)
-  CHKSIZE(RadioData, 318);
-  CHKSIZE(ModelData, 2848);
+  CHKSIZE(RadioData, 326);
+  CHKSIZE(ModelData, 2849);
 #elif defined(PCBXLITE)
   CHKSIZE(RadioData, 844);
   CHKSIZE(ModelData, 6025);

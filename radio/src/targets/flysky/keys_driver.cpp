@@ -161,7 +161,7 @@ uint32_t switchState(uint8_t index)
   uint8_t sw_num = index / 3; // 0, 1, 2, 3
   uint8_t adc_num = sw_num + 4;
 
-  if (index < SW_SE0) // SA, SB, SC, SD
+  if (index < SW_SE0) { // SA, SB, SC, SD
     if (sw_num > 1) {
       adc_num += 2; // skip the 2 pots
     }
@@ -189,18 +189,19 @@ uint32_t switchState(uint8_t index)
 
 void keysInit()
 {
-  // RCC_AHBPeriphClockCmd(KEYS_RCC_AHB1Periph, ENABLE);
-  GPIO_InitTypeDef gpio_init;
-  //default state is low
-  gpio_init.GPIO_Mode = GPIO_Mode_IN;
-  gpio_init.GPIO_OType = GPIO_OType_PP;
-  gpio_init.GPIO_Speed = GPIO_Speed_2MHz;
-  gpio_init.GPIO_PuPd = GPIO_PuPd_UP;
-  gpio_init.GPIO_Pin = KEYS_LINES_PINS;
-  GPIO_Init(KEYS_MATRIX_LINES_GPIO, &gpio_init);
-  gpio_init.GPIO_Mode = GPIO_Mode_OUT;
-  gpio_init.GPIO_Pin = KEYS_COLUMNS_PINS;
-  GPIO_Init(KEYS_MATRIX_COLUMNS_GPIO, &gpio_init);
+  GPIO_InitTypeDef GPIO_InitStructure;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN;
+  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
+  GPIO_InitStructure.GPIO_Pin = KEYS_LINES_PINS;
+  GPIO_Init(KEYS_MATRIX_LINES_GPIO, &GPIO_InitStructure);
+
+  INIT_KEYS_PINS(GPIOC); // SE, SF
+
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
+  GPIO_InitStructure.GPIO_Pin = KEYS_COLUMNS_PINS;
+  GPIO_Init(KEYS_MATRIX_COLUMNS_GPIO, &GPIO_InitStructure);
   //set to height
   KEYS_MATRIX_COLUMNS_GPIO->BSRR = KEYS_COLUMNS_PINS;
 }

@@ -800,6 +800,11 @@ void ConvertSpecialFunctions_217_to_218(CustomFunctionData * cf218, CustomFuncti
   }
 }
 
+void ConvertRadioData_222_to_223(RadioData & settings)
+{
+
+}
+
 void ConvertRadioData_217_to_218(RadioData & settings)
 {
   RadioData_v216 settings_v217 = (RadioData_v216 &)settings;
@@ -1231,8 +1236,8 @@ bool eeConvert()
 {
   const char *msg = NULL;
 
-  if (g_eeGeneral.version == 216) {
-    msg = "EEprom Data v216";
+  if (g_eeGeneral.version == 222) {
+    msg = "EEprom Data v222";
   }
   else if (g_eeGeneral.version == 217) {
     msg = "EEprom Data v217";
@@ -1246,7 +1251,7 @@ bool eeConvert()
   // Information to the user and wait for key press
   g_eeGeneral.backlightMode = e_backlight_mode_on;
   g_eeGeneral.backlightBright = 0;
-  g_eeGeneral.contrast = 25;
+  g_eeGeneral.contrast = LCD_CONTRAST_DEFAULT;
 
   ALERT(STR_STORAGE_WARNING, msg, AU_BAD_RADIODATA);
 
@@ -1255,9 +1260,9 @@ bool eeConvert()
   // General Settings conversion
   eeLoadGeneralSettingsData();
   int version = conversionVersionStart;
-  if (version == 216) {
-    version = 217;
-    ConvertRadioData_216_to_217(g_eeGeneral);
+  if (version == 222) {
+    version = 223;
+    ConvertRadioData_222_to_223(g_eeGeneral);
   }
   if (version == 217) {
     version = 218;
