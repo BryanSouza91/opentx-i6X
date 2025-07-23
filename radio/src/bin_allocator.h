@@ -18,65 +18,108 @@
  * GNU General Public License for more details.
  */
 
+ 
 #ifndef _BIN_ALLOCATOR_H_
 #define _BIN_ALLOCATOR_H_
 
 #include "debug.h"
+#include <cstddef> // For size_t
+#include <cstring> // For memset (instead of memclear if not defined elsewhere)
 
+// Assuming PACK is a macro that ensures no padding between members
+// (often __attribute__((packed)) for GCC/Clang or #pragma pack for MSVC)
 template <int SIZE_SLOT, int NUM_BINS> class BinAllocator {
 private:
-  PACK(struct Bin {
-    char data[SIZE_SLOT];
-    bool Used;
-  });
-  struct Bin Bins[NUM_BINS];
-  int NoUsedBins;
+    PACK(struct Bin {
+        char data[SIZE_SLOT];
+        // In a true free list, 'data' would be a union with 'size_t next_free_index;'
+        // but for a simpler optimization, we'll just track 'Used' and calculate index.
+        bool Used; // Still needed for free, if not using a full free list with union
+    });
+    Bin Bins[NUM_BINS];
+    int NoUsedBins;
+
+    // For a faster malloc, we could track the last found free bin
+    size_t lastFreeBinIndex; // Hint for malloc to start searching
+
 public:
-  BinAllocator() : NoUsedBins(0) {
-    memclear(Bins, sizeof(Bins));
-  }
-  bool free(void * ptr) {
-    for (size_t n = 0; n < NUM_BINS; ++n) {
-      if (ptr == Bins[n].data) {
-        Bins[n].Used = false;
-        --NoUsedBins;
-        // TRACE("\tBinAllocator<%d> free %lu ------", SIZE_SLOT, n);
-        return true;
-      }
+    BinAllocator() : NoUsedBins(0), lastFreeBinIndex(0) {
+        // memset is standard C++ for clearing memory
+        std::memset(Bins, 0, sizeof(Bins));
     }
-    return false;
-  }
-  bool is_member(void * ptr) {
-    return (ptr >= Bins[0].data && ptr <= Bins[NUM_BINS-1].data);
-  }
-  void * malloc(size_t size) {
-    if (size > SIZE_SLOT) {
-      // TRACE("BinAllocator<%d> malloc [%lu] size > SIZE_SLOT", SIZE_SLOT, size);
-      return 0;
+
+    // Optimized free using pointer arithmetic
+    bool free(void * ptr) {
+        if (!is_member(ptr)) {
+            return false;
+        }
+
+        // Calculate the index of the bin using pointer arithmetic.
+        // This relies on Bins being a contiguous array and data being at offset 0 within Bin.
+        // (reinterpret_cast<char*>(ptr) - reinterpret_cast<char*>(&Bins[0])) gives byte offset from start of Bins array.
+        // Divide by sizeof(Bin) to get the element index.
+        size_t binIndex = (reinterpret_cast<char*>(ptr) - reinterpret_cast<char*>(&Bins[0])) / sizeof(Bin);
+
+        // Additional sanity check: ensure the pointer truly points to the start of a bin's data
+        // This is important if `ptr` could potentially point *within* a bin's data, not just its start.
+        if (binIndex >= NUM_BINS || ptr != Bins[binIndex].data) {
+             return false; // Pointer is not at the start of a known bin's data area
+        }
+
+        if (Bins[binIndex].Used) {
+            Bins[binIndex].Used = false;
+            --NoUsedBins;
+            // Update the hint for malloc if this freed bin is before the current hint
+            if (binIndex < lastFreeBinIndex) {
+                lastFreeBinIndex = binIndex;
+            }
+            return true;
+        }
+        return false;
     }
-    if (NoUsedBins >= NUM_BINS) {
-      // TRACE("BinAllocator<%d> malloc [%lu] no free slots", SIZE_SLOT, size);
-      return 0;
+
+    bool is_member(void * ptr) {
+        // More robust check: ptr must be within the bounds of the entire Bins array,
+        // and aligned to the start of a Bin's data.
+        char* start_address = reinterpret_cast<char*>(&Bins[0]);
+        char* end_address = reinterpret_cast<char*>(&Bins[NUM_BINS - 1]) + sizeof(Bin); // End of the last bin
+
+        return (reinterpret_cast<char*>(ptr) >= start_address && reinterpret_cast<char*>(ptr) < end_address &&
+                ((reinterpret_cast<char*>(ptr) - start_address) % sizeof(Bin)) == 0);
     }
-    for (size_t n = 0; n < NUM_BINS; ++n) {
-      if (!Bins[n].Used) {
-        Bins[n].Used = true;
-        ++NoUsedBins;
-        // TRACE("\tBinAllocator<%d> malloc %lu[%lu]", SIZE_SLOT, n, size);
-        return Bins[n].data;
-      }
+
+    // Optimized malloc: Start search from lastFreeBinIndex
+    void * malloc(size_t size) {
+        if (size > SIZE_SLOT) {
+            return nullptr;
+        }
+        if (NoUsedBins >= NUM_BINS) {
+            return nullptr;
+        }
+
+        // Start search from lastFreeBinIndex, and wrap around if necessary
+        for (size_t n = 0; n < NUM_BINS; ++n) {
+            size_t currentIdx = (lastFreeBinIndex + n) % NUM_BINS;
+            if (!Bins[currentIdx].Used) {
+                Bins[currentIdx].Used = true;
+                ++NoUsedBins;
+                lastFreeBinIndex = currentIdx; // Update hint for next malloc
+                return Bins[currentIdx].data;
+            }
+        }
+        return nullptr;
     }
-    // TRACE("BinAllocator<%d> malloc [%lu] no free slots", SIZE_SLOT , size);
-    return 0;
-  }
-  size_t size(void * ptr) {
-    return is_member(ptr) ? SIZE_SLOT : 0;
-  }
-  bool can_fit(void * ptr, size_t size) {
-    return is_member(ptr) && size <= SIZE_SLOT;  //todo is_member check is redundant
-  }
-  unsigned int capacity() { return NUM_BINS; }
-  unsigned int size() { return NoUsedBins; }
+
+    size_t size(void * ptr) {
+        return is_member(ptr) ? SIZE_SLOT : 0;
+    }
+
+    bool can_fit(void * ptr, size_t size) {
+        return is_member(ptr) && size <= SIZE_SLOT;
+    }
+
+    unsigned int capacity() { return NUM_BINS; }
+    unsigned int size() { return NoUsedBins; }
 };
 
 #if defined(SIMU)
@@ -91,8 +134,7 @@ typedef BinAllocator<91,50> BinAllocator_slots2;
 extern BinAllocator_slots1 slots1;
 extern BinAllocator_slots2 slots2;
 
-// wrapper for our BinAllocator for Lua
 void *bin_l_alloc (void *ud, void *ptr, size_t osize, size_t nsize);
-#endif   //#if defined(USE_BIN_ALLOCATOR)
+#endif
 
 #endif // _BIN_ALLOCATOR_H_

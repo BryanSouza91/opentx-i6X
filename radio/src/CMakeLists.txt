@@ -51,9 +51,9 @@ option(EXTPWR_INVERT "Enable inverted pwr enable on PC13" OFF)
 option(CRSF_FULLDUPLEX "Enable CRSF full duplex mode with RX on PA15" OFF)
 
 # since we reset all default CMAKE compiler flags for firmware builds, provide an alternate way for user to specify additional flags.
-set(FIRMWARE_C_FLAGS "" CACHE STRING "Additional flags for firmware target c compiler (note: all CMAKE_C_FLAGS[_*] are ignored for firmware/bootloader).")
+set(FIRMWARE_C_FLAGS "-O3 -pipe -DNDEBUG -fno-exceptions -fno-non-call-exceptions -fno-common -ffunction-sections -fdata-sections -finline-small-functions -findirect-inlining" CACHE STRING "Additional flags for firmware target c compiler (note: all CMAKE_C_FLAGS[_*] are ignored for firmware/bootloader).")
 set(FIRMWARE_C_FLAGS_DEBUG "-g" CACHE STRING "Additional flags for firmware target (Debug config) c compiler (note: CMAKE_C_FLAGS_DEBUG is ignored for firmware/bootloader).")
-set(FIRMWARE_CXX_FLAGS "" CACHE STRING "Additional flags for firmware target c++ compiler (note: all CMAKE_CXX_FLAGS[_*] are ignored for firmware/bootloader).")
+set(FIRMWARE_CXX_FLAGS "-O3 -pipe -DNDEBUG -fno-exceptions -fno-non-call-exceptions -fno-rtti -fno-use-cxa-atexit -fno-common -ffunction-sections -fdata-sections -finline-small-functions -findirect-inlining" CACHE STRING "Additional flags for firmware target c++ compiler (note: all CMAKE_CXX_FLAGS[_*] are ignored for firmware/bootloader).")
 set(FIRMWARE_CXX_FLAGS_DEBUG "-g" CACHE STRING "Additional flags for firmware target (Debug config) c++ compiler (note: CMAKE_CXX_FLAGS_DEBUG is ignored for firmware/bootloader).")
 
 set(THIRDPARTY_DIR thirdparty)

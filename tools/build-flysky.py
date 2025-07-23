@@ -74,6 +74,7 @@ def build(board, translation, srcdir):
     command = "cmake %s -DTRANSLATIONS=%s -DDEFAULT_TEMPLATE_SETUP=21 %s" % (cmake_options, translation, srcdir)
     print(command)
     os.system(command)
+    os.system("make clean")
     os.system("make firmware -j6")
     os.chdir(cwd)
     index = 0

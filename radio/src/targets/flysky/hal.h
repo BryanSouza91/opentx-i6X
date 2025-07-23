@@ -51,7 +51,7 @@
 
 // LCD driver
 #define LCD_RCC_AHB1Periph            (RCC_AHBPeriph_GPIOB | RCC_AHBPeriph_GPIOD | RCC_AHBPeriph_GPIOE)
-#define LCD_RCC_APB1Periph            0
+// #define LCD_RCC_APB1Periph            0
 #define LCD_RCC_APB2Periph            0
 
 #define LCD_DATA_GPIO                 GPIOE
@@ -64,6 +64,87 @@
 #define LCD_RS_PIN                    GPIO_Pin_3
 #define LCD_RD_PIN                    GPIO_Pin_7
 #define LCD_CS_PIN                    GPIO_Pin_2
+
+
+
+
+// --- LCD driver (SPI Specific) ---
+// Define the SPI peripheral and its associated GPIOs and DMA
+#define LCD_SPI                       SPI2 // Assuming SPI2 based on lcd_driver_spi.cpp
+#define LCD_RCC_APB1Periph            RCC_APB1Periph_SPI2 // Clock for SPI2
+#define LCD_RCC_AHB1Periph_GPIO       RCC_AHBPeriph_GPIOB // GPIO Port for SPI2 pins
+#define LCD_SPI_GPIO                  GPIOB // GPIO Port for SPI2 pins (SCK, MISO, MOSI)
+#define LCD_GPIO_AF                   GPIO_AF_0 // Alternate Function for SPI pins (check datasheet for correct AF)
+
+#define LCD_CLK_GPIO_PIN              GPIO_Pin_13 // PB13 - SPI2_SCK
+#define LCD_MOSI_GPIO_PIN             GPIO_Pin_15 // PB15 - SPI2_MOSI
+#define LCD_MISO_GPIO_PIN             GPIO_Pin_14 // PB14 - SPI2_MISO (often not needed for LCD, but good to define)
+#define LCD_CLK_GPIO_PinSource        GPIO_PinSource13
+#define LCD_MOSI_GPIO_PinSource       GPIO_PinSource15
+#define LCD_MISO_GPIO_PinSource       GPIO_PinSource14
+
+// // LCD control pins (not part of SPI peripheral, but general GPIOs)
+#define LCD_NCS_GPIO                  GPIOB // Chip Select (CS)
+#define LCD_NCS_GPIO_PIN              GPIO_Pin_2 // PB6 (Example, verify with schematic)
+#define LCD_A0_GPIO                   GPIOB // Data/Command (A0 or DC)
+#define LCD_A0_GPIO_PIN               GPIO_Pin_3 // PB7 (Example, verify with schematic)
+#define LCD_RST_GPIO                  GPIOB // Reset
+#define LCD_RST_GPIO_PIN              GPIO_Pin_4 // PB8 (Example, verify with schematic)
+
+// LCD control pin macros
+#define LCD_NCS_LOW()                 GPIO_ResetBits(LCD_NCS_GPIO, LCD_NCS_GPIO_PIN) // Assert Chip Select (NCS) low
+#define LCD_NCS_HIGH()                GPIO_SetBits(LCD_NCS_GPIO, LCD_NCS_GPIO_PIN) // De-assert Chip Select (NCS) high
+#define LCD_A0_LOW()                  GPIO_ResetBits(LCD_A0_GPIO, LCD_A0_GPIO_PIN) // Set A0 low for command
+#define LCD_A0_HIGH()                 GPIO_SetBits(LCD_A0_GPIO, LCD_A0_GPIO_PIN) // Set A0 high for data
+#define LCD_RST_LOW()                 GPIO_ResetBits(LCD_RST_GPIO, LCD_RST_GPIO_PIN) // Set Reset low
+#define LCD_RST_HIGH()                GPIO_SetBits(LCD_RST_GPIO, LCD_RST_GPIO_PIN) // Set Reset high
+
+// DMA for SPI LCD (assuming DMA1 Channel 2 for SPI2_TX, verify with datasheet)
+// The lcd_driver_spi.cpp uses LCD_DMA_Stream, which is likely a macro for a specific DMA channel.
+// For STM32F072, SPI3_TX is typically DMA1 Channel 2.
+#define LCD_DMA_Stream                DMA1_Channel2 // DMA channel for SPI3_TX
+#define LCD_DMA_Stream_IRQn           DMA1_Channel2_3_IRQn // Consolidated IRQ for DMA1 Channel 2 & 3
+#define LCD_DMA_FLAGS                 (DMA_IFCR_CGIF2 | DMA_IFCR_CTCIF2 | DMA_IFCR_CHTIF2 | DMA_IFCR_CTEIF2) // Flags for DMA1 Channel 2
+
+// LCD_RD_PIN_NUMBER is not relevant for SPI, but keeping it for now if other parts of code still reference it.
+#define LCD_RD_PIN_NUMBER             0 // Placeholder, not used for SPI
+
+// LCD command definitions (from lcd_driver_spi.cpp)
+#define LCD_CMD_RESET             0xE2 // Soft reset (common for many LCDs)
+#define LCD_CMD_BIAS_1_6          0xA3 // Set bias (common)
+#define LCD_CMD_SEG_NORMAL        0xA0 // Segment normal (common)
+#define LCD_CMD_SEG_INVERSE       0xA1 // Segment inverse (common)
+#define LCD_CMD_COM_NORMAL        0xC0 // COM scan normal (common)
+#define LCD_CMD_COM_REVERSE       0xC8 // COM scan reverse (common)
+#define LCD_CMD_POWERCTRL_ALL_ON  0x2F // All built-in power circuits on (common)
+#define LCD_CMD_REG_RATIO_011     0x23 // Regulator resistor ratio (common)
+#define LCD_CMD_EV                0x81 // Set Electronic Volume (contrast) (common)
+#define LCD_CMD_SET_STARTLINE     0x40 // Set display start line (common)
+#define LCD_CMD_SET_PAGESTART     0xB0 // Set page address (common)
+#define LCD_CMD_SET_COL_LO        0x00
+#define LCD_CMD_SET_COL_HI        0x10
+#define LCD_CMD_DISPLAY_OFF       0xAE // Display off (common)
+#define LCD_CMD_DISPLAY_ON        0xAF // Display on (common)
+#define LCD_CMD_MODE_RAM          0xA4 // Normal display mode (common)
+#define LCD_CMD_MODE_ALLBLACK     0xA5 // All pixels on (common)
+
+// LCD dimensions (from board.h, but explicitly defined here for clarity in LCD driver)
+#define LCD_W                           128
+#define LCD_H                           64
+#define LCD_DEPTH                       1 // 1-bit monochrome
+#define LCD_CONTRAST_MIN                30
+#define LCD_CONTRAST_MAX                63
+#define LCD_CONTRAST_DEFAULT            38
+
+// Reset wait delay for SPI LCD (from lcd_driver_spi.cpp)
+#define RESET_WAIT_DELAY_MS            300 // Wait time after LCD reset before first command
+
+// DMA flags for LCD (from lcd_driver_spi.cpp)
+// Note: These flags are specific to the DMA stream used for SPI TX.
+// If LCD_DMA_Stream is DMA1_Channel2, then use DMA_ISR_TCIF2 etc.
+// The provided lcd_driver_spi.cpp uses generic LCD_DMA_FLAGS, which should be defined based on LCD_DMA_Stream.
+// I've updated LCD_DMA_FLAGS above to match DMA1_Channel2.
+
 
 
 // CRC
@@ -314,10 +395,12 @@ void ActionAFHDS2A();
 #define TELEMETRY_DMA_Channel_TX        DMA1_Channel4
 #define TELEMETRY_DMA_TX_IRQn           DMA1_Channel4_5_IRQn
 #define TELEMETRY_DMA_TX_IRQHandler     DMA1_Channel4_5_IRQHandler
+#define TELEMETRY_DMA_IRQ_PRIORITY      0 // Highest priority for telemetry DMA
 #define TELEMETRY_DMA_TX_FLAG_TC        DMA1_IT_TC4
 #define TELEMETRY_DMA_Channel_RX        DMA1_Channel5
 #define TELEMETRY_USART_IRQHandler      USART2_IRQHandler
 #define TELEMETRY_USART_IRQn            USART2_IRQn
+#define TELEMETRY_USART_IRQ_PRIORITY    0 // Highest priority for telemetry
 
 
 // Backlight
@@ -334,11 +417,10 @@ void ActionAFHDS2A();
   #define BACKLIGHT_CCER                TIM_CCER_CC4P | TIM_CCER_CC4E
   #define BACKLIGHT_COUNTER_REGISTER    BACKLIGHT_TIMER->CCR4
   // std, fixed brightness
-  #define BACKLIGHT_STD_RCC_APB1Periph      0
-  #define BACKLIGHT_STD_RCC_AHB1Periph      RCC_AHBPeriph_GPIOF
-  #define BACKLIGHT_STD_GPIO                GPIOF
-  #define BACKLIGHT_STD_GPIO_PIN            GPIO_Pin_3
-
+  #define BACKLIGHT_STD_RCC_APB1Periph  0
+  #define BACKLIGHT_STD_RCC_AHB1Periph  RCC_AHBPeriph_GPIOF
+  #define BACKLIGHT_STD_GPIO            GPIOF
+  #define BACKLIGHT_STD_GPIO_PIN        GPIO_Pin_3
 // Audio
 //...
 

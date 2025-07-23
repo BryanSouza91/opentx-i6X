@@ -2,9 +2,9 @@
  * Copyright (C) OpenTX
  *
  * Based on code named
- *   th9x - http://code.google.com/p/th9x
- *   er9x - http://code.google.com/p/er9x
- *   gruvin9x - http://code.google.com/p/gruvin9x
+ * th9x - http://code.google.com/p/th9x
+ * er9x - http://code.google.com/p/er9x
+ * gruvin9x - http://code.google.com/p/gruvin9x
  *
  * License GPLv2: http://www.gnu.org/licenses/gpl-2.0.html
  *
@@ -19,17 +19,22 @@
  */
 
 #include "opentx.h"
+#include "hal.h" // Include the updated hal.h for shared definitions
 
 // uint32_t telemetryErrors = 0;
+// DMAFifo must be declared with __DMA attribute to ensure it's in DMA-accessible memory
 DMAFifo<TELEMETRY_FIFO_SIZE> telemetryDMAFifo __DMA (TELEMETRY_DMA_Channel_RX);
 
-#define TELEMETRY_USART_IRQ_PRIORITY 0 // was 6
-#define TELEMETRY_DMA_IRQ_PRIORITY   0 // was 7
+// Forward declaration for the telemetry TX DMA complete handler
+// This function will contain the logic previously in TELEMETRY_DMA_TX_IRQHandler
+// It's made static as it will be called from the main consolidated DMA ISR.
+static void handleTelemetryTxDmaComplete(void);
 
 void telemetryPortInit(uint32_t baudrate, uint8_t mode) {
   TRACE("telemetryPortInit %d", baudrate);
 
   NVIC_InitTypeDef NVIC_InitStructure;
+  // The NVIC configuration for TELEMETRY_DMA_TX_IRQn is now defined in hal.h
   NVIC_InitStructure.NVIC_IRQChannel = TELEMETRY_DMA_TX_IRQn;
   NVIC_InitStructure.NVIC_IRQChannelPriority = 1;
   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
@@ -87,6 +92,7 @@ void telemetryPortInit(uint32_t baudrate, uint8_t mode) {
 
   USART_ITConfig(TELEMETRY_USART, USART_IT_RXNE, DISABLE);
   USART_ITConfig(TELEMETRY_USART, USART_IT_TXE, DISABLE);
+  // TELEMETRY_USART_IRQ_PRIORITY is now defined in hal.h
   NVIC_SetPriority(TELEMETRY_USART_IRQn, TELEMETRY_USART_IRQ_PRIORITY);
   NVIC_EnableIRQ(TELEMETRY_USART_IRQn);
 
@@ -156,16 +162,21 @@ void sportSendBuffer(const uint8_t* buffer, uint32_t count) {
   USART_DMACmd(TELEMETRY_USART, USART_DMAReq_Tx, ENABLE);
   DMA_ITConfig(TELEMETRY_DMA_Channel_TX, DMA_IT_TC, ENABLE);
 
-  // enable interrupt and set it's priority
+  // Enable interrupt and set its priority.
+  // TELEMETRY_DMA_IRQ_PRIORITY is now defined in hal.h
   NVIC_EnableIRQ(TELEMETRY_DMA_TX_IRQn);
   NVIC_SetPriority(TELEMETRY_DMA_TX_IRQn, TELEMETRY_DMA_IRQ_PRIORITY);
 }
 
-extern "C" void TELEMETRY_DMA_TX_IRQHandler(void) {
+// The direct definition of TELEMETRY_DMA_TX_IRQHandler is removed from here
+// as it conflicts with DMA1_Channel2_3_IRQHandler.
+// Its logic is moved to a static helper function called from the consolidated ISR.
+static void handleTelemetryTxDmaComplete(void) {
   DEBUG_INTERRUPT(INT_TELEM_DMA);
+  // The DMA_GetITStatus and DMA_ClearITPendingBit macros should handle the correct channel.
   if (DMA_GetITStatus(TELEMETRY_DMA_TX_FLAG_TC)) {
     DMA_ClearITPendingBit(TELEMETRY_DMA_TX_FLAG_TC);
-    // clear TC flag before enabling interrupt
+    // Clear TC flag before enabling interrupt
     TELEMETRY_USART->ISR &= ~USART_ISR_TC;
     TELEMETRY_USART->CR1 |= USART_CR1_TCIE;
   }
@@ -198,4 +209,9 @@ extern "C" void TELEMETRY_USART_IRQHandler(void) {
 // TODO we should have telemetry in an higher layer, functions above should move to a sport_driver.cpp
 uint8_t telemetryGetByte(uint8_t* byte) {
   return telemetryDMAFifo.pop(*byte);
+}
+
+// Expose the telemetry TX DMA complete handler for the consolidated ISR
+extern "C" void telemetry_dma_tx_isr_dispatch(void) {
+    handleTelemetryTxDmaComplete();
 }
