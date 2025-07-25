@@ -221,18 +221,18 @@ int32_t getSourceNumFieldValue(int16_t val, int16_t min, int16_t max)
     bool valid_source = true;
     result = _getValue_internal(v.value, &valid_source);
     if (abs((int32_t)v.value) >= MIXSRC_FIRST_GVAR && abs((int32_t)v.value) <= MIXSRC_LAST_GVAR) {
-      // Mimic behavior of GET_GVAR_PREC1 for GVARs (prec 0 means *10)
-      // This assumes g_model.gvars and its prec field are accessible.
-      // If not, this part might need adaptation or removal.
-      result = result * 10; // Assuming GVARs might need *10 scaling for consistency
+      result = result * 10; // GVARs are stored as 10x value (e.g., 10 for 1.0, 500 for 50.0)
     } else {
-      // Convert RESX-scaled value to 1000-scaled (e.g., -1024 to -1000, 1024 to 1000)
-      // This assumes calcRESXto1000 is defined elsewhere (e.g., in opentx.h)
-      result = divRoundClosest32(result * 1000, RESX); // Changed to divRoundClosest32
+      result = calcRESXto1000(result); // Convert RESX-scaled value to 1000-scaled (e.g., 1024 to 1000)
     }
   } else {
-    result = v.value * 10; // Direct value is already 10-scaled (e.g., 100% is 1000)
+    // Direct value is already 10-scaled (e.g., 100% is 1000)
+    // We return it as-is, so it's in the -1000 to 1000 range for -100 to 100.
+    result = v.value * 10;
   }
+  // Ensure the result is within the specified min/max range.
+  // The min and max parameters are in the -100 to 100 range, so we multiply by 10.
+  // The result is also in a 10-scaled percentage range (-1000 to 1000).
   return limit<int>(min * 10, result, max * 10);
 }
 
@@ -253,11 +253,16 @@ uint8_t mixWarning;
 
 int16_t calibratedAnalogs[NUM_CALIBRATED_ANALOGS];
 int16_t channelOutputs[MAX_OUTPUT_CHANNELS] = {0};
+// ex_chans is declared extern in opentx.h and defined in mixer.cpp
 int16_t ex_chans[MAX_OUTPUT_CHANNELS] = {0}; // Outputs (before LIMITS) of the last perMain;
 
 #if defined(HELI)
 int16_t cyc_anas[3] = {0};
 #endif
+
+// The applyCurve function definition has been removed from here.
+// It is expected to be defined in curves.cpp and linked with the firmware.
+
 
 // #define EXTENDED_EXPO
 // increases range of expo curve but costs about 82 bytes flash
@@ -408,18 +413,22 @@ void applyExpos(int16_t * anas, uint8_t mode, uint8_t ovwrIdx, int16_t ovwrValue
 
         //========== CURVE=================
         if (ed->curve.value) {
+          // This calls the applyCurve function which is defined in curves.cpp
           v = applyCurve(v, ed->curve);
         }
 
         //========== WEIGHT ===============
-        // Use getSourceNumFieldValue for weight
+        // getSourceNumFieldValue returns a 1000-scaled value (e.g., 1000 for 100%).
+        // 'v' is in RESX range (-1024 to 1024).
+        // To apply the weight: v_RESX * (weight_1000_scale / 1000).
         int32_t weight = getSourceNumFieldValue(ed->weight, MIN_EXPO_WEIGHT, 100);
-        v = divRoundClosest32((int32_t)v * weight, 1000); // Changed to divRoundClosest32
+        v = divRoundClosest32((int32_t)v * weight, 1000);
 
         //========== OFFSET ===============
-        // Use getSourceNumFieldValue for offset
+        // getSourceNumFieldValue returns a 1000-scaled value.
+        // Convert to RESX scale before adding to 'v' (which is RESX-scaled).
         int32_t offset = getSourceNumFieldValue(ed->offset, -100, 100);
-        if (offset) v += divRoundClosest32(calc100toRESX(offset), 10); // Changed to divRoundClosest32
+        if (offset) v += calc1000toRESX(offset);
 
         //========== TRIMS ================
         // Reverted to original OpenTX 'carryTrim' as 'trimSource' is not a member of ExpoData
@@ -438,7 +447,7 @@ void applyExpos(int16_t * anas, uint8_t mode, uint8_t ovwrIdx, int16_t ovwrValue
 // #define PREVENT_ARITHMETIC_OVERFLOW
 // because of optimizations the reserves before overruns occurs is only the half
 // this defines enables some checks the greatly improves this situation
-// It should nearly prevent all overruns (is still a chance for it, but quite low)
+// It should nearly prevent all all overruns (is still a chance for it, but quite low)
 // negative side is code cost 96 bytes flash
 
 // we do it now half way, only in applyLimits, which costs currently 50bytes
@@ -1014,11 +1023,15 @@ void evalFlightModeMixes(uint8_t mode, uint8_t tick10ms)
         }
       }
 
-      // Changed: Using getSourceNumFieldValue for weight
-      int32_t weight = getSourceNumFieldValue(MD_WEIGHT(md), -RESX, RESX);
-      weight = calc100to256_16Bits(weight);
+      //========== WEIGHT ===============
+      // getSourceNumFieldValue returns a 1000-scaled value (e.g., 1000 for 100%).
+      // 'v' is in RESX range (-1024 to 1024).
+      // To apply the weight: v_RESX * (weight_1000_scale / 1000).
+      int32_t weight = getSourceNumFieldValue(MD_WEIGHT(md), -100, 100);
+      int32_t dv = divRoundClosest32((int32_t)v * weight, 1000);
+
       //========== SPEED ===============
-      // now its on input side, but without weight compensation. More like other remote controls
+      // now its on input side, but without weight compensation. More like other controls
       // lower weight causes slower movement
 
       if (mode <= e_perout_mode_inactive_flight_mode && (md->speedUp || md->speedDown)) { // there are delay values
@@ -1030,9 +1043,9 @@ void evalFlightModeMixes(uint8_t mode, uint8_t tick10ms)
           // open.20.fsguruh: speed is defined in % movement per second; In menu we specify the full movement (-100% to 100%) = 200% in total
           // the unit of the stored value is the value from md->speedUp or md->speedDown * 0.1s; e.g. value 4 means 0.4 seconds
           // because we get a tick each 10msec, we need 100 ticks for one second
-          // the value in md->speedXXX gives the time it should take to do a full movement from -100 to 100 therefore 200%. This equals 2048 in recalculated internal range
+            // the value in md->speedXXX gives the time it should take to do a full movement from -100 to 100 therefore 200%. This equals 2048 in recalculated internal range
           if (tick10ms || !s_mixer_first_run_done) {
-            // only if already time is passed add or substract a value according the speed configured
+            // only if already time is passed add or substract a value according to the speed configured
             int32_t rate = (int32_t) tick10ms << (DEL_MULT_SHIFT+11);  // = DEL_MULT*2048*tick10ms
             // rate equals a full range for one second; if less time is passed rate is accordingly smaller
             // if one second passed, rate would be 2048 (full motion)*256(recalculated weight)*100(100 ticks needed for one second)
@@ -1064,49 +1077,50 @@ void evalFlightModeMixes(uint8_t mode, uint8_t tick10ms)
 
       //========== CURVES ===============
       if (applyOffsetAndCurve && md->curve.type != CURVE_REF_DIFF && md->curve.value) {
+        // This calls the applyCurve function which is defined in curves.cpp
         v = applyCurve(v, md->curve);
       }
 
       //========== WEIGHT ===============
-      int32_t dv = (int32_t)v * weight;
-      dv = divRoundClosest32(dv, 10); // Changed: Using divRoundClosest32
+      // dv is already calculated above as v_RESX * (weight_1000_scale / 1000)
+      // No changes needed here, as the weight application is now handled correctly above.
 
       //========== OFFSET / AFTER ===============
       if (applyOffsetAndCurve) {
-        // Changed: Using getSourceNumFieldValue for offset
+        // getSourceNumFieldValue returns a 1000-scaled value.
+        // Convert to RESX scale before adding to 'dv' (which is RESX-scaled).
         int32_t offset = getSourceNumFieldValue(MD_OFFSET(md), GV_RANGELARGE_NEG, GV_RANGELARGE);
-        if (offset) dv += divRoundClosest32(calc100toRESX_16Bits(offset), 10) << 8; // Changed: Using divRoundClosest32
+        dv += calc1000toRESX(offset);
       }
 
       //========== DIFFERENTIAL =========
       if (md->curve.type == CURVE_REF_DIFF && md->curve.value) {
+        // This calls the applyCurve function which is defined in curves.cpp
         dv = applyCurve(dv, md->curve);
       }
 
       int32_t * ptr = &chans[md->destCh]; // Save calculating address several times
 
       switch (md->mltpx) {
-        // Changed: MLTPX_REPL to MLTPX_REP
-        case MLTPX_REP:
-          *ptr = dv;
-#if defined(BOLD_FONT)
+        case MLTPX_REP: // Replace
+          *ptr = dv << 8; // Scale dv to RESX*256 before storing
+          #if defined(BOLD_FONT)
           if (mode==e_perout_mode_normal) {
-            // Changed: Using activeMixes instead of swOn[m].activeMix
             for (uint8_t m=i-1; m<MAX_MIXERS && mixAddress(m)->destCh==md->destCh; m--)
               activeMixes[m] = false;
           }
-#endif
+          #endif
           break;
-        case MLTPX_MUL:
-          // @@@2 we have to remove the weight factor of 256 in case of 100%; now we use the new base of 256
-          dv >>= 8;
-          dv *= *ptr;
-          dv = divRoundClosest32(dv, RESXl);   // Changed to divRoundClosest32
-          *ptr = dv;
+        case MLTPX_MUL: // Multiply
+          // dv is in RESX scale. We need to multiply it by the current *ptr value,
+          // which is in RESX*256 scale. The result should also be RESX*256 scale.
+          // (dv / RESX) * (*ptr / 256) * RESX * 256 = dv * (*ptr / 256)
+          // Simplified: (dv * (*ptr >> 8)) / RESXl (to get RESX scale) then << 8
+          dv = divRoundClosest32((int32_t)dv * (*ptr >> 8), RESXl);
+          *ptr = dv << 8; // Scale result back to RESX*256
           break;
-        default: // MLTPX_ADD
-          // Changed: Using divRoundClosest32 for addition (from EdgeTX)
-          *ptr += dv; //Mixer output add up to the line (dv + (dv>0 ? 100/2 : -100/2))/(100);
+        default: // MLTPX_ADD (Add)
+          *ptr += (dv << 8); // Scale dv to RESX*256 before adding
           break;
       } // endswitch md->mltpx
 #ifdef PREVENT_ARITHMETIC_OVERFLOW

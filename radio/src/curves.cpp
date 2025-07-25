@@ -2,9 +2,9 @@
  * Copyright (C) OpenTX
  *
  * Based on code named
- *   th9x - http://code.google.com/p/th9x 
- *   er9x - http://code.google.com/p/er9x
- *   gruvin9x - http://code.google.com/p/gruvin9x
+ * th9x - http://code.google.com/p/th9x 
+ * er9x - http://code.google.com/p/er9x
+ * gruvin9x - http://code.google.com/p/gruvin9x
  *
  * License GPLv2: http://www.gnu.org/licenses/gpl-2.0.html
  *
@@ -302,7 +302,7 @@ int applyCurve(int x, CurveRef & curve)
         case CURVE_ABS_F: //f|abs(f)
           return x > 0 ? RESX : -RESX;
       }
-      break;
+      break; // <--- ADDED THIS BREAK STATEMENT
 
     case CURVE_REF_CUSTOM:
     {

@@ -203,6 +203,7 @@
 #define CTOOL_DATA_SIZE 512 // minimize RAM usage for non PCBI6X_ELRS builds
 #endif
 
+
 // RESX range is used for internal calculation; The menu says -100.0 to 100.0; internally it is -1024 to 1024 to allow some optimizations
 #define RESX_SHIFT 10
 #define RESX       1024
@@ -1069,6 +1070,8 @@ enum AUDIO_SOUNDS {
 #include "buzzer.h"
 #endif
 
+
+
 #include "translations.h"
 #include "fonts.h"
 
@@ -1203,7 +1206,6 @@ union ReusableBuffer
   uint8_t cToolData[CTOOL_DATA_SIZE];
 #endif
 };
-
 
 extern ReusableBuffer reusableBuffer;
 
